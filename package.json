@@ -1,0 +1,11 @@
+{
+  "name": "swap-management-system",
+  "version": "1.0.0",
+  "description": "College Swap Management System",
+  "scripts": {
+    "start:backend": "cd backend && node server.js",
+    "start:frontend": "cd frontend && npm run dev",
+    "dev": "start cmd /c \"cd backend && node server.js\" && cd frontend && npm run dev",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install"
+  }
+}
