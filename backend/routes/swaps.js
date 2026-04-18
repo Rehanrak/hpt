@@ -9,7 +9,7 @@ const createSwapRequestLimiter = rateLimit({
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user ? String(req.user.id) : ipKeyGenerator(req.ip),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: { message: 'Too many request attempts. Please try again shortly.' }
 });
 
@@ -50,7 +50,7 @@ router.get('/eligible', authenticateToken, (req, res) => {
 });
 
 // POST /api/swaps/request - Send 2-way swap request
-router.post('/request', authenticateToken, createSwapRequestLimiter, (req, res) => {
+router.post('/request', createSwapRequestLimiter, authenticateToken, (req, res) => {
   const { partner_id, reason } = req.body;
   const initiator_id = req.user.id;
 
