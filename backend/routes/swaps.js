@@ -3,9 +3,29 @@ const router = express.Router();
 const db = require('../database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
+const REQUEST_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const REQUEST_RATE_LIMIT_MAX = 10;
+const requestRateLimiter = new Map();
+
 // Helper to send notification
 function notify(userId, message) {
   db.run(`INSERT INTO notifications (user_id, message) VALUES (?, ?)`, [userId, message]);
+}
+
+function canCreateSwapRequest(userId) {
+  const now = Date.now();
+  const current = requestRateLimiter.get(userId);
+
+  if (!current || now - current.windowStart > REQUEST_RATE_LIMIT_WINDOW_MS) {
+    requestRateLimiter.set(userId, { windowStart: now, count: 1 });
+    return true;
+  }
+  if (current.count >= REQUEST_RATE_LIMIT_MAX) {
+    return false;
+  }
+
+  current.count += 1;
+  return true;
 }
 
 // GET /api/swaps/eligible - Find eligible partners
@@ -50,20 +70,25 @@ router.post('/request', authenticateToken, (req, res) => {
   if (Number(partner_id) === Number(initiator_id)) {
     return res.status(400).json({ message: 'You cannot send a request to yourself.' });
   }
+  if (!canCreateSwapRequest(initiator_id)) {
+    return res.status(429).json({ message: 'Too many request attempts. Please try again shortly.' });
+  }
 
   db.get(`SELECT id, batch, cgpa, year FROM users WHERE id = ? AND role = 'student'`, [initiator_id], (err, initiator) => {
-    if (err || !initiator) return res.status(400).json({ message: 'Invalid initiator.' });
+    if (err) return res.status(500).json({ message: 'Server error.' });
+    if (!initiator) return res.status(400).json({ message: 'Invalid initiator.' });
 
     db.get(`SELECT id, batch, cgpa, year FROM users WHERE id = ? AND role = 'student'`, [partner_id], (err, partner) => {
       if (err) return res.status(500).json({ message: 'Server error.' });
       if (!partner) return res.status(404).json({ message: 'Partner not found.' });
 
-      const isEligible =
-        initiator.year === partner.year &&
-        initiator.batch !== partner.batch &&
-        Math.abs((initiator.cgpa || 0) - (partner.cgpa || 0)) <= 1.0;
+      const eligibilityErrors = [];
+      if (initiator.year !== partner.year) eligibilityErrors.push('same year is required');
+      if (initiator.batch === partner.batch) eligibilityErrors.push('partner must be in a different batch');
+      if (Math.abs((initiator.cgpa || 0) - (partner.cgpa || 0)) > 1.0) eligibilityErrors.push('CGPA difference must be 1.0 or less');
+      const isEligible = eligibilityErrors.length === 0;
       if (!isEligible) {
-        return res.status(400).json({ message: 'Selected student is not eligible for swap request.' });
+        return res.status(400).json({ message: `Selected student is not eligible: ${eligibilityErrors.join(', ')}.` });
       }
 
       // Check if they already have an active request (in either direction)
