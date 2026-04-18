@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { getAllStudents } from '../../api';
+import { exportToCSV, transformBatchRecordsForCSV } from '../../utils/csvExport';
 
 export default function BatchRecords() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [batchFilter, setBatchFilter] = useState('');
 
   useEffect(() => {
     getAllStudents()
@@ -13,80 +15,96 @@ export default function BatchRecords() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = students.filter(s => 
-    s.name.toLowerCase().includes(search.toLowerCase()) || 
-    s.reg_no.toLowerCase().includes(search.toLowerCase()) ||
-    s.batch.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const exportCSV = () => {
-    const headers = ['Register Number', 'Name', 'Email', 'Batch', 'CGPA', 'Year'];
-    const csvContent = [
-      headers.join(','),
-      ...filtered.map(s => `"${s.reg_no}","${s.name}","${s.email}","${s.batch}",${s.cgpa},${s.year}`)
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'VIT_CSE_Batch_Records.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportCSV = () => {
+    if (students.length === 0) {
+      alert('No batch records to export');
+      return;
+    }
+    const csvData = transformBatchRecordsForCSV(students);
+    exportToCSV(csvData, 'batch-records');
   };
+
+  const filtered = students.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || 
+                          s.reg_no.toLowerCase().includes(search.toLowerCase());
+    const matchesBatch = batchFilter ? s.batch === batchFilter : true;
+    return matchesSearch && matchesBatch;
+  });
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Batch Records</h1>
-          <p className="page-subtitle">Directory of all VIT CSE students registered in the system.</p>
+      <div className="page-header-row">
+        <div className="page-header">
+          <div className="page-title">Batch Records</div>
+          <div className="page-sub">All 54 students and their current batch assignments</div>
         </div>
-        <button className="btn btn-success" onClick={exportCSV}>
-          ⬇ Export to CSV
-        </button>
+        <button onClick={handleExportCSV} className="btn btn-ghost btn-sm" style={{ padding: "7px 14px", border: "1px solid var(--border)", background: "transparent", color: "var(--text-secondary)", borderRadius: "var(--radius-sm)" }}>⬇ Export CSV</button>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <input 
-          type="text" 
-          placeholder="Search by Name, Reg No, or Batch…" 
-          className="form-input" 
-          style={{ maxWidth: 400 }}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      <div className="search-bar">
+        <div className="search-input-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input 
+            className="form-input" 
+            type="text" 
+            placeholder="Search by name or reg no..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <select 
+          className="form-input form-select" 
+          style={{ width: 'auto', paddingRight: 40 }}
+          value={batchFilter}
+          onChange={e => setBatchFilter(e.target.value)}
+        >
+          <option value="">All Batches</option>
+          <option value="A1">A1</option><option value="A2">A2</option>
+          <option value="B1">B1</option><option value="B2">B2</option>
+          <option value="C1">C1</option><option value="C2">C2</option>
+        </select>
       </div>
 
       {loading ? <div className="spinner" /> : (
-        <div className="table-wrapper">
+        <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Registration No.</th>
-                <th>Full Name</th>
-                <th>Batch</th>
+                <th>Name</th>
+                <th>Reg No</th>
                 <th>CGPA</th>
+                <th>Batch</th>
+                <th>Section</th>
                 <th>Year</th>
-                <th>Email Address</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(s => (
                 <tr key={s.id}>
-                  <td className="td-primary">{s.reg_no}</td>
-                  <td style={{ fontWeight: 500 }}>{s.name}</td>
-                  <td><span className="badge badge-approved" style={{ background: 'rgba(124, 58, 237, 0.15)', color: 'var(--purple-light)', borderColor: 'rgba(124, 58, 237, 0.3)' }}>{s.batch}</span></td>
-                  <td>{s.cgpa?.toFixed(2)}</td>
-                  <td>{s.year}</td>
-                  <td>{s.email}</td>
+                  <td style={{ fontWeight: 600 }}>{s.name}</td>
+                  <td>{s.reg_no}</td>
+                  <td>{s.cgpa?.toFixed(1) || s.cgpa}</td>
+                  <td>
+                    <span className={`batch-chip ${s.batch?.[0] === 'B' || s.batch?.[0] === 'C' ? 'batch-chip-to' : 'batch-chip-from'}`}>
+                      {s.batch}
+                    </span>
+                  </td>
+                  <td>CSE-{s.batch?.[0] || 'A'}</td>
+                  <td>{s.year || 1}</td>
+                  <td>
+                    <span style={{ color: '#4ade80', background: 'rgba(74,222,128,0.12)', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, border: '1px solid rgba(74,222,128,0.3)' }}>
+                      <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#4ade80', marginRight: 4 }}></span>
+                      Active
+                    </span>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: 24 }}>No registered students found matching your search.</td>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                    No batch records found matching your criteria.
+                  </td>
                 </tr>
               )}
             </tbody>

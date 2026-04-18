@@ -57,21 +57,27 @@ export default function SwapCard({ swap, currentUserId, adminActions, partnerAct
       <div className="swap-card-body">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 'var(--radius-sm)' }}>
           <div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Initiator</p>
-            <p style={{ fontWeight: 600 }}>{swap.initiator_name}</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>📍 Initiator</p>
+            <p style={{ fontWeight: 600, fontSize: '1.05rem' }}>{swap.initiator_name}</p>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{swap.initiator_reg}</p>
-            <p style={{ fontSize: '0.85rem' }}>Batch: <strong style={{color: 'var(--purple-light)'}}>{swap.initiator_batch}</strong></p>
+            <div style={{display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap'}}>
+              <span style={{ fontSize: '0.8rem', background: 'rgba(99,102,241,0.15)', color: 'var(--indigo-light)', padding: '3px 8px', borderRadius: 4 }}>Batch: <strong>{swap.initiator_batch}</strong></span>
+              <span style={{ fontSize: '0.8rem', background: 'rgba(168,85,247,0.15)', color: 'var(--purple-light)', padding: '3px 8px', borderRadius: 4 }}>Slot: <strong>{swap.initiator_slot || 'N/A'}</strong></span>
+            </div>
           </div>
           <div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Partner</p>
-            <p style={{ fontWeight: 600 }}>{swap.partner_name}</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>🎯 Partner</p>
+            <p style={{ fontWeight: 600, fontSize: '1.05rem' }}>{swap.partner_name}</p>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{swap.partner_reg}</p>
-            <p style={{ fontSize: '0.85rem' }}>Batch: <strong style={{color: 'var(--purple-light)'}}>{swap.partner_batch}</strong></p>
+            <div style={{display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap'}}>
+              <span style={{ fontSize: '0.8rem', background: 'rgba(34,197,94,0.15)', color: 'var(--green-light)', padding: '3px 8px', borderRadius: 4 }}>Batch: <strong>{swap.partner_batch}</strong></span>
+              <span style={{ fontSize: '0.8rem', background: 'rgba(59,130,246,0.15)', color: 'var(--blue-light)', padding: '3px 8px', borderRadius: 4 }}>Slot: <strong>{swap.partner_slot || 'N/A'}</strong></span>
+            </div>
           </div>
         </div>
         
         <div className="swap-detail" style={{ marginTop: 8 }}>
-          <strong>Reason:</strong>
+          <strong>📝 Reason:</strong>
           <span>{swap.reason}</span>
         </div>
       </div>

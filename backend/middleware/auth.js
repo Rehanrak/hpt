@@ -25,4 +25,11 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticateToken, requireAdmin };
+const requireAdminOrHOD = (req, res, next) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'hod') {
+    return res.status(403).json({ message: 'Access denied. Admin or HOD only.' });
+  }
+  next();
+};
+
+module.exports = { authenticateToken, requireAdmin, requireAdminOrHOD };

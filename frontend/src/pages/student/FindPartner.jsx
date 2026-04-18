@@ -69,6 +69,7 @@ export default function FindPartner({ setActive }) {
                 <th>Registration No.</th>
                 <th>Name</th>
                 <th>Batch</th>
+                <th>Slot</th>
                 <th>CGPA</th>
                 <th>Action</th>
               </tr>
@@ -79,6 +80,7 @@ export default function FindPartner({ setActive }) {
                   <td className="td-primary">{p.reg_no}</td>
                   <td>{p.name}</td>
                   <td><span className="badge badge-pending">{p.batch}</span></td>
+                  <td><span style={{ fontSize: '0.8rem', background: 'rgba(168,85,247,0.15)', color: '#a78bfa', padding: '3px 8px', borderRadius: 4 }}>{p.slot || 'N/A'}</span></td>
                   <td>{p.cgpa?.toFixed(2)}</td>
                   <td>
                     <button className="btn btn-primary btn-sm" onClick={() => setSelectedPartner(p)}>
@@ -89,7 +91,7 @@ export default function FindPartner({ setActive }) {
               ))}
               {partners.length === 0 && (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: 24 }}>No eligible partners found.</td>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: 24 }}>No eligible partners found.</td>
                 </tr>
               )}
             </tbody>

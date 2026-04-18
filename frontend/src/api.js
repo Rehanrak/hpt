@@ -38,6 +38,7 @@ export const getAllSwaps = (status) => api.get('/swaps/admin', { params: status 
 export const getSwapStats = () => api.get('/swaps/stats');
 export const reviewSwapAdmin = (id, data) => api.put(`/swaps/${id}/admin`, data);
 export const getAllStudents = () => api.get('/swaps/students');
+export const getAuditLog = () => api.get('/swaps/audit-log');
 
 // General
 export const getNotifications = () => api.get('/swaps/notifications');

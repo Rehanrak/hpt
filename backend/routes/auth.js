@@ -7,7 +7,7 @@ require('dotenv').config();
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
-  const { name, email, password, reg_no, batch, cgpa, year } = req.body;
+  const { name, email, password, reg_no, batch, slot, section, cgpa, year } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Name, email, and password are required.' });
@@ -16,8 +16,8 @@ router.post('/register', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     db.run(
-      `INSERT INTO users (name, email, password, role, reg_no, batch, cgpa, year) VALUES (?, ?, ?, 'student', ?, ?, ?, ?)`,
-      [name, email, hashedPassword, reg_no || null, batch || null, cgpa || null, year || null],
+      `INSERT INTO users (name, email, password, role, reg_no, batch, slot, section, cgpa, year) VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?)`,
+      [name, email, hashedPassword, reg_no || null, batch || null, slot || null, section || null, cgpa || null, year || null],
       function (err) {
         if (err) {
           if (err.message.includes('UNIQUE constraint failed')) {
@@ -64,6 +64,8 @@ router.post('/login', (req, res) => {
         role: user.role,
         reg_no: user.reg_no,
         batch: user.batch,
+        slot: user.slot,
+        section: user.section,
         cgpa: user.cgpa,
         year: user.year
       },
@@ -74,7 +76,7 @@ router.post('/login', (req, res) => {
 // GET /api/auth/me
 const { authenticateToken } = require('../middleware/auth');
 router.get('/me', authenticateToken, (req, res) => {
-  db.get(`SELECT id, name, email, role, reg_no, batch, cgpa, year, created_at FROM users WHERE id = ?`, [req.user.id], (err, user) => {
+  db.get(`SELECT id, name, email, role, reg_no, batch, slot, section, cgpa, year, created_at FROM users WHERE id = ?`, [req.user.id], (err, user) => {
     if (err) return res.status(500).json({ message: 'Server error.' });
     if (!user) return res.status(404).json({ message: 'User not found.' });
     res.json(user);

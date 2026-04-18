@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, requireAdminOrHOD } = require('../middleware/auth');
 
 // Helper to send notification
 function notify(userId, message) {
@@ -17,7 +17,7 @@ router.get('/eligible', authenticateToken, (req, res) => {
     
     // Eligible: same year, diff batch, cgpa diff <= 1.0
     let query = `
-      SELECT id, name, reg_no, batch, cgpa, year 
+      SELECT id, name, reg_no, batch, slot, section, cgpa, year 
       FROM users 
       WHERE role = 'student' 
       AND id != ? 
@@ -115,8 +115,63 @@ router.put('/:id/partner', authenticateToken, (req, res) => {
     );
 });
 
-// GET /api/swaps/admin - Admin view requests
-router.get('/admin', authenticateToken, requireAdmin, (req, res) => {
+// POST /api/swaps/admin/users - Create a new user (Admin only)
+router.post('/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    const { name, email, password, role, reg_no, batch, cgpa, year, slot, section } = req.body;
+    
+    console.log('POST /admin/users called with:', { name, email, role });
+    
+    if (!name || !email || !password || !role) {
+        return res.status(400).json({ message: 'Name, email, password, and role are required.' });
+    }
+    
+    if (!['student', 'hod', 'faculty_coordinator'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role. Must be student, hod, or faculty_coordinator.' });
+    }
+    
+    try {
+        const bcrypt = require('bcrypt');
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        db.run(
+            `INSERT INTO users (name, email, password, role, reg_no, batch, cgpa, year, slot, section) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [name, email, hashedPassword, role, reg_no || null, batch || null, cgpa || null, year || null, slot || null, section || null],
+            function(err) {
+                if (err) {
+                    console.error('DB Insert Error:', err);
+                    if (err.message.includes('UNIQUE constraint failed: users.email')) {
+                        return res.status(409).json({ message: 'Email already exists.' });
+                    }
+                    if (err.message.includes('UNIQUE constraint failed: users.reg_no')) {
+                        return res.status(409).json({ message: 'Registration number already exists.' });
+                    }
+                    return res.status(500).json({ message: 'Server error.', error: err.message });
+                }
+                console.log('User created:', name, email);
+                res.status(201).json({ message: 'User created successfully.', id: this.lastID });
+            }
+        );
+    } catch (err) {
+        console.error('Bcrypt/Route Error:', err);
+        res.status(500).json({ message: 'Server error.', error: err.message });
+    }
+});
+
+// GET /api/swaps/admin/users - Get all users (Admin only)
+router.get('/admin/users', authenticateToken, requireAdmin, (req, res) => {
+    db.all(
+        `SELECT id, name, email, role, reg_no, batch, slot, section, cgpa, year, created_at FROM users ORDER BY created_at DESC`,
+        [],
+        (err, rows) => {
+            if (err) return res.status(500).json({ message: 'Server error.', error: err.message });
+            res.json(rows || []);
+        }
+    );
+});
+
+// GET /api/swaps/admin - Admin/HOD view requests
+router.get('/admin', authenticateToken, requireAdminOrHOD, (req, res) => {
     const { status } = req.query;
     let query = `
       SELECT sr.*, 
@@ -139,8 +194,8 @@ router.get('/admin', authenticateToken, requireAdmin, (req, res) => {
     });
 });
 
-// PUT /api/swaps/:id/admin - Admin accepts/rejects
-router.put('/:id/admin', authenticateToken, requireAdmin, (req, res) => {
+// PUT /api/swaps/:id/admin - Admin/HOD accepts/rejects
+router.put('/:id/admin', authenticateToken, requireAdminOrHOD, (req, res) => {
     const { status, admin_comment } = req.body; // 'approved' or 'rejected_admin'
     const { id } = req.params;
 
@@ -177,7 +232,7 @@ router.put('/:id/admin', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // GET /api/swaps/stats
-router.get('/stats', authenticateToken, requireAdmin, (req, res) => {
+router.get('/stats', authenticateToken, requireAdminOrHOD, (req, res) => {
     db.get(`
       SELECT
         COUNT(*) as total,
@@ -194,11 +249,35 @@ router.get('/stats', authenticateToken, requireAdmin, (req, res) => {
     });
 });
 
-// GET /api/swaps/students - All students for admin directory
-router.get('/students', authenticateToken, requireAdmin, (req, res) => {
+// GET /api/swaps/students - All students for admin/HOD directory
+router.get('/students', authenticateToken, requireAdminOrHOD, (req, res) => {
     db.all(`SELECT id, name, reg_no, email, batch, cgpa, year FROM users WHERE role = 'student' ORDER BY name`, [], (err, rows) => {
         if (err) return res.status(500).json({ message: 'Server error.' });
         res.json(rows);
+    });
+});
+
+// GET /api/swaps/audit-log - Complete audit log for HOD/Admin (all decisions)
+router.get('/audit-log', authenticateToken, requireAdminOrHOD, (req, res) => {
+    const query = `
+      SELECT sr.id, sr.status, sr.reason, sr.admin_comment, sr.created_at, sr.updated_at,
+             i.name as initiator_name, i.batch as initiator_batch, i.reg_no as initiator_reg, 
+             i.slot as initiator_slot, i.cgpa as initiator_cgpa,
+             p.name as partner_name, p.batch as partner_batch, p.reg_no as partner_reg, 
+             p.slot as partner_slot, p.cgpa as partner_cgpa
+      FROM swap_requests sr
+      JOIN users i ON sr.initiator_id = i.id
+      JOIN users p ON sr.partner_id = p.id
+      WHERE sr.status IN ('approved', 'rejected_admin')
+      ORDER BY sr.updated_at DESC
+    `;
+    
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error('Audit log error:', err.message);
+            return res.status(500).json({ message: 'Server error.', error: err.message });
+        }
+        res.json(rows || []);
     });
 });
 

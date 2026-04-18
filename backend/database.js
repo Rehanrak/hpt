@@ -22,14 +22,33 @@ function initializeDatabase() {
         name TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         password TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'student' CHECK(role IN ('student', 'admin')),
+        role TEXT NOT NULL DEFAULT 'student' CHECK(role IN ('student', 'hod', 'admin')),
         reg_no TEXT UNIQUE,
         batch TEXT,
+        slot TEXT,
+        section TEXT,
         cgpa REAL,
         year INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // Add slot and section columns if they don't exist
+    db.all("PRAGMA table_info(users)", (err, columns) => {
+      const columnNames = columns.map(col => col.name);
+      if (!columnNames.includes('slot')) {
+        db.run(`ALTER TABLE users ADD COLUMN slot TEXT`, (err) => {
+          if (err) console.log('slot column may already exist:', err.message);
+          else console.log('Added slot column to users table.');
+        });
+      }
+      if (!columnNames.includes('section')) {
+        db.run(`ALTER TABLE users ADD COLUMN section TEXT`, (err) => {
+          if (err) console.log('section column may already exist:', err.message);
+          else console.log('Added section column to users table.');
+        });
+      }
+    });
 
     // Swap requests table for 2-way handshake
     db.run(`
@@ -65,23 +84,29 @@ function initializeDatabase() {
       if (row.count === 0) {
         console.log('Seeding initial data...');
         const hashedAdmin = await bcrypt.hash('admin123', 10);
-        db.run(`INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`, 
-          ['HOD Admin', 'admin@vit.ac.in', hashedAdmin, 'admin']);
-
+        const hashedHOD = await bcrypt.hash('hod123', 10);
         const hashedStudent = await bcrypt.hash('password123', 10);
         
-        // Seed some students
+        db.run(`INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`, 
+          ['System Admin', 'admin@vit.ac.in', hashedAdmin, 'admin']);
+        
+        db.run(`INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`, 
+          ['Dr. Priya Nair', 'hod@vit.ac.in', hashedHOD, 'hod']);
+        
+        // Faculty Coordinator role removed - using HOD only
+        
+        // Seed some students with slot and section info
         const students = [
-          ['John Doe', 'john@vit.ac.in', '21BCE001', 'CS-A', 8.5, 3],
-          ['Jane Smith', 'jane@vit.ac.in', '21BCE002', 'CS-B', 8.2, 3],
-          ['Alice Brown', 'alice@vit.ac.in', '21BCE003', 'CS-B', 9.0, 3],
-          ['Bob White', 'bob@vit.ac.in', '21BCE004', 'CS-A', 7.8, 3],
-          ['Charlie Green', 'charlie@vit.ac.in', '21BCE005', 'CS-C', 8.6, 3]
+          ['John Doe', 'john@vit.ac.in', '21BCE001', 'A1', 'Slot-1', 'CSE-A', 8.5, 3],
+          ['Jane Smith', 'jane@vit.ac.in', '21BCE002', 'B1', 'Slot-2', 'CSE-B', 8.2, 3],
+          ['Alice Brown', 'alice@vit.ac.in', '21BCE003', 'B2', 'Slot-3', 'CSE-B', 9.0, 3],
+          ['Bob White', 'bob@vit.ac.in', '21BCE004', 'A2', 'Slot-4', 'CSE-A', 7.8, 3],
+          ['Charlie Green', 'charlie@vit.ac.in', '21BCE005', 'C1', 'Slot-5', 'CSE-C', 8.6, 3]
         ];
 
-        const stmt = db.prepare(`INSERT INTO users (name, email, password, role, reg_no, batch, cgpa, year) VALUES (?, ?, ?, 'student', ?, ?, ?, ?)`);
+        const stmt = db.prepare(`INSERT INTO users (name, email, password, role, reg_no, batch, slot, section, cgpa, year) VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?)`);
         students.forEach(s => {
-          stmt.run(s[0], s[1], hashedStudent, s[2], s[3], s[4], s[5]);
+          stmt.run(s[0], s[1], hashedStudent, s[2], s[3], s[4], s[5], s[6], s[7]);
         });
         stmt.finalize();
         console.log('Seeded admin and 5 sample students.');

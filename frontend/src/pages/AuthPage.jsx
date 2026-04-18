@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { loginUser, registerUser } from '../api';
+import { loginUser } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 const Toast = ({ message, type }) =>
@@ -7,14 +7,11 @@ const Toast = ({ message, type }) =>
 
 export default function AuthPage() {
   const { login } = useAuth();
-  const [tab, setTab] = useState('login');
+  const [tab, setTab] = useState('admin');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ message: '', type: '' });
 
-  // Login form (accepts email or registration number as "email")
   const [loginData, setLoginData] = useState({ email: '', password: '' });
-  // Register form for new schema (batch swap specific)
-  const [regData, setRegData] = useState({ name: '', email: '', password: '', reg_no: '', batch: '', cgpa: '', year: '3' });
 
   const showToast = (message, type = 'error') => {
     setToast({ message, type });
@@ -25,8 +22,31 @@ export default function AuthPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await loginUser(loginData);
-      login(res.data.token, res.data.user);
+      // For students, send regNo as email to backend (backend checks both email and reg_no)
+      const loginPayload = tab === 'student' 
+        ? { email: loginData.regNo, password: loginData.password }
+        : loginData;
+      const res = await loginUser(loginPayload);
+      const user = res.data.user;
+      
+      // Validate role matches the selected tab
+      if (tab === 'admin' && user.role !== 'admin') {
+        showToast('Only admin credentials can be used in Admin portal.');
+        setLoading(false);
+        return;
+      }
+      if (tab === 'hod' && user.role !== 'hod') {
+        showToast('Only HOD credentials can be used in HOD portal.');
+        setLoading(false);
+        return;
+      }
+      if (tab === 'student' && user.role !== 'student') {
+        showToast('Invalid registration number or student role.');
+        setLoading(false);
+        return;
+      }
+      
+      login(res.data.token, user);
     } catch (err) {
       showToast(err.response?.data?.message || 'Login failed. Try again.');
     } finally {
@@ -34,111 +54,112 @@ export default function AuthPage() {
     }
   };
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    if (!regData.name || !regData.email || !regData.password || !regData.reg_no || !regData.batch || !regData.cgpa || !regData.year) {
-      return showToast('All fields are required.');
-    }
-    setLoading(true);
-    try {
-      await registerUser({ ...regData, cgpa: parseFloat(regData.cgpa), year: parseInt(regData.year, 10) });
-      showToast('Registration successful! Please log in.', 'success');
-      setTab('login');
-      setLoginData({ email: regData.reg_no, password: '' });
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Registration failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="auth-page">
+    <div className="login-page">
+      <div className="login-bg">
+        <div className="login-bg-orb blue"></div>
+        <div className="login-bg-orb teal"></div>
+      </div>
+
       <Toast {...toast} />
-      <div className="auth-container">
-        <div className="auth-logo">
-          <h1>⇄ BatchSwap</h1>
-          <p>VIT CSE Department Swap Management System</p>
+
+      <div className="login-box">
+        <div className="login-logo">
+          <div className="login-logo-icon">BS</div>
+          <div>
+            <div className="login-logo-text">BatchSwap</div>
+            <div className="login-logo-sub">VIT — CSE Department</div>
+          </div>
         </div>
 
-        <div className="card auth-card">
-          <div className="auth-tabs">
-            <button className={`auth-tab ${tab === 'login' ? 'active' : ''}`} onClick={() => setTab('login')}>Login</button>
-            <button className={`auth-tab ${tab === 'register' ? 'active' : ''}`} onClick={() => setTab('register')}>Register</button>
-          </div>
+        <div className="login-tabs">
+          <button className={`login-tab ${tab === 'admin' ? 'active' : ''}`} onClick={() => { setTab('admin'); setLoginData({ email: '', password: '' }); }}>🔧 Admin</button>
+          <button className={`login-tab ${tab === 'hod' ? 'active' : ''}`} onClick={() => { setTab('hod'); setLoginData({ email: '', password: '' }); }}>👨‍💼 HOD</button>
+          <button className={`login-tab ${tab === 'student' ? 'active' : ''}`} onClick={() => { setTab('student'); setLoginData({ regNo: '', password: '' }); }}>🎓 Student</button>
+        </div>
 
-          {tab === 'login' ? (
+        {tab === 'admin' ? (
+          <div>
+            <div className="login-title">Admin Portal</div>
+            <div className="login-sub">System administrator access</div>
+
             <form onSubmit={handleLogin} className="form-fields">
               <div className="form-group">
-                <label className="form-label">Email or Reg No (Student) / Email (Admin)</label>
-                <input className="form-input" type="text" placeholder="e.g. 21BCE001"
+                <label className="form-label">Admin Email</label>
+                <input className="form-input" type="text" placeholder="admin@vit.ac.in"
                   value={loginData.email} onChange={e => setLoginData({ ...loginData, email: e.target.value })} required />
               </div>
               <div className="form-group">
                 <label className="form-label">Password</label>
-                <input className="form-input" type="password" placeholder="Enter your password"
+                <input className="form-input" type="password" placeholder="Enter password"
                   value={loginData.password} onChange={e => setLoginData({ ...loginData, password: e.target.value })} required />
               </div>
-              <div className="divider">Admin default: admin@vit.ac.in / admin123</div>
-              <div className="divider" style={{marginTop: -4}}>Student default: 21BCE001 / password123</div>
-              <button className="btn btn-primary btn-lg btn-full" type="submit" disabled={loading}>
-                {loading ? 'Signing in…' : '→ Sign In'}
+              
+              <button className="btn btn-blue w-full" type="submit" disabled={loading}>
+                {loading ? 'Signing in…' : 'Sign In →'}
               </button>
             </form>
-          ) : (
-            <form onSubmit={handleRegister} className="form-fields">
-              <div className="form-group">
-                <label className="form-label">Full Name</label>
-                <input className="form-input" type="text" placeholder="John Doe"
-                  value={regData.name} onChange={e => setRegData({ ...regData, name: e.target.value })} required />
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Registration No.</label>
-                  <input className="form-input" type="text" placeholder="e.g. 21BCE001" maxLength="8"
-                    value={regData.reg_no} onChange={e => setRegData({ ...regData, reg_no: e.target.value.toUpperCase() })} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Current Batch</label>
-                  <input className="form-input" type="text" placeholder="e.g. CS-A"
-                    value={regData.batch} onChange={e => setRegData({ ...regData, batch: e.target.value })} required />
-                </div>
-              </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">CGPA</label>
-                  <input className="form-input" type="number" step="0.01" min="0" max="10" placeholder="e.g. 8.5"
-                    value={regData.cgpa} onChange={e => setRegData({ ...regData, cgpa: e.target.value })} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Year of Study</label>
-                  <select className="form-select" value={regData.year} onChange={e => setRegData({ ...regData, year: e.target.value })}>
-                    <option value="1">1st Year</option>
-                    <option value="2">2nd Year</option>
-                    <option value="3">3rd Year</option>
-                    <option value="4">4th Year</option>
-                  </select>
-                </div>
-              </div>
+            <div className="test-creds-box">
+              <div className="test-creds-title">Admin Credentials</div>
+              <div>Admin default: admin@vit.ac.in / admin123</div>
+            </div>
+          </div>
+        ) : tab === 'hod' ? (
+          <div>
+            <div className="login-title">HOD Portal</div>
+            <div className="login-sub">Head of Department access</div>
 
+            <form onSubmit={handleLogin} className="form-fields">
               <div className="form-group">
-                <label className="form-label">VIT Email Address</label>
-                <input className="form-input" type="email" placeholder="student@vit.ac.in"
-                  value={regData.email} onChange={e => setRegData({ ...regData, email: e.target.value })} required />
+                <label className="form-label">HOD Email</label>
+                <input className="form-input" type="text" placeholder="hod@vit.ac.in"
+                  value={loginData.email} onChange={e => setLoginData({ ...loginData, email: e.target.value })} required />
               </div>
               <div className="form-group">
                 <label className="form-label">Password</label>
-                <input className="form-input" type="password" placeholder="Min. 6 characters"
-                  value={regData.password} onChange={e => setRegData({ ...regData, password: e.target.value })} required />
+                <input className="form-input" type="password" placeholder="Enter password"
+                  value={loginData.password} onChange={e => setLoginData({ ...loginData, password: e.target.value })} required />
               </div>
-              <button className="btn btn-primary btn-lg btn-full" type="submit" disabled={loading}>
-                {loading ? 'Creating Account…' : '→ Create Account'}
+              
+              <button className="btn btn-blue w-full" type="submit" disabled={loading}>
+                {loading ? 'Signing in…' : 'Sign In →'}
               </button>
             </form>
-          )}
-        </div>
+
+            <div className="test-creds-box">
+              <div className="test-creds-title">HOD Test Credentials</div>
+              <div>Contact admin for credentials</div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="login-title">Student Portal</div>
+            <div className="login-sub">Student swap requests & tracking</div>
+
+            <form onSubmit={handleLogin} className="form-fields">
+              <div className="form-group">
+                <label className="form-label">Registration Number</label>
+                <input className="form-input" type="text" placeholder="24BBS0001"
+                  value={loginData.regNo} onChange={e => setLoginData({ ...loginData, regNo: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Password</label>
+                <input className="form-input" type="password" placeholder="Enter password"
+                  value={loginData.password} onChange={e => setLoginData({ ...loginData, password: e.target.value })} required />
+              </div>
+              
+              <button className="btn btn-blue w-full" type="submit" disabled={loading}>
+                {loading ? 'Signing in…' : 'Sign In →'}
+              </button>
+            </form>
+
+            <div className="test-creds-box">
+              <div className="test-creds-title">Sample Student Credentials</div>
+              <div>24BBS0158 (Aryan Aman) / Aryan@123</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
