@@ -1,31 +1,21 @@
 const express = require('express');
 const router = express.Router();
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const db = require('../database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
-const REQUEST_RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const REQUEST_RATE_LIMIT_MAX = 10;
-const requestRateLimiter = new Map();
+const createSwapRequestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user ? String(req.user.id) : ipKeyGenerator(req.ip),
+  message: { message: 'Too many request attempts. Please try again shortly.' }
+});
 
 // Helper to send notification
 function notify(userId, message) {
   db.run(`INSERT INTO notifications (user_id, message) VALUES (?, ?)`, [userId, message]);
-}
-
-function canCreateSwapRequest(userId) {
-  const now = Date.now();
-  const current = requestRateLimiter.get(userId);
-
-  if (!current || now - current.windowStart > REQUEST_RATE_LIMIT_WINDOW_MS) {
-    requestRateLimiter.set(userId, { windowStart: now, count: 1 });
-    return true;
-  }
-  if (current.count >= REQUEST_RATE_LIMIT_MAX) {
-    return false;
-  }
-
-  current.count += 1;
-  return true;
 }
 
 // GET /api/swaps/eligible - Find eligible partners
@@ -60,7 +50,7 @@ router.get('/eligible', authenticateToken, (req, res) => {
 });
 
 // POST /api/swaps/request - Send 2-way swap request
-router.post('/request', authenticateToken, (req, res) => {
+router.post('/request', authenticateToken, createSwapRequestLimiter, (req, res) => {
   const { partner_id, reason } = req.body;
   const initiator_id = req.user.id;
 
@@ -69,9 +59,6 @@ router.post('/request', authenticateToken, (req, res) => {
   }
   if (Number(partner_id) === Number(initiator_id)) {
     return res.status(400).json({ message: 'You cannot send a request to yourself.' });
-  }
-  if (!canCreateSwapRequest(initiator_id)) {
-    return res.status(429).json({ message: 'Too many request attempts. Please try again shortly.' });
   }
 
   db.get(`SELECT id, batch, cgpa, year FROM users WHERE id = ? AND role = 'student'`, [initiator_id], (err, initiator) => {
