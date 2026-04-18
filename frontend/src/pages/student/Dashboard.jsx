@@ -28,7 +28,7 @@ export default function StudentDashboard({ setActive }) {
   const recentSwaps = swaps.slice(0, 3);
   const unreadNotifs = notifications.filter(n => !n.is_read).length;
   const flow = {
-    sentToPartner: swaps.filter(s => s.initiator_id === user.id && s.status === 'pending_partner').length,
+    pendingPartner: swaps.filter(s => s.initiator_id === user.id && s.status === 'pending_partner').length,
     pendingHod: swaps.filter(s => s.initiator_id === user.id && s.status === 'pending_admin').length,
     completed: swaps.filter(s => s.initiator_id === user.id && s.status === 'approved').length,
   };
@@ -81,7 +81,7 @@ export default function StudentDashboard({ setActive }) {
             <h3>Send Request</h3>
           </div>
           <p>Find an eligible partner and create a swap request with your reason.</p>
-          <div className="workflow-step-meta">{flow.sentToPartner} waiting for partner response</div>
+          <div className="workflow-step-meta">{flow.pendingPartner} waiting for partner response</div>
         </div>
         <div className="workflow-step">
           <div className="workflow-step-header">
