@@ -27,6 +27,11 @@ export default function StudentDashboard({ setActive }) {
 
   const recentSwaps = swaps.slice(0, 3);
   const unreadNotifs = notifications.filter(n => !n.is_read).length;
+  const flow = {
+    pendingPartner: swaps.filter(s => s.initiator_id === user.id && s.status === 'pending_partner').length,
+    pendingHod: swaps.filter(s => s.initiator_id === user.id && s.status === 'pending_admin').length,
+    completed: swaps.filter(s => s.initiator_id === user.id && s.status === 'approved').length,
+  };
 
   return (
     <div>
@@ -66,6 +71,33 @@ export default function StudentDashboard({ setActive }) {
           <div className="stat-icon">✅</div>
           <div className="stat-value">{stats.completed}</div>
           <div className="stat-label">Completed</div>
+        </div>
+      </div>
+
+      <div className="workflow-grid" style={{ marginBottom: 24 }}>
+        <div className="workflow-step">
+          <div className="workflow-step-header">
+            <span className="workflow-step-icon">1</span>
+            <h3>Send Request</h3>
+          </div>
+          <p>Find an eligible partner and create a swap request with your reason.</p>
+          <div className="workflow-step-meta">{flow.pendingPartner} waiting for partner response</div>
+        </div>
+        <div className="workflow-step">
+          <div className="workflow-step-header">
+            <span className="workflow-step-icon">2</span>
+            <h3>Partner Review</h3>
+          </div>
+          <p>Partner accepts/rejects. Accepted requests move to HOD approval stage.</p>
+          <div className="workflow-step-meta">{flow.pendingHod} awaiting HOD decision</div>
+        </div>
+        <div className="workflow-step">
+          <div className="workflow-step-header">
+            <span className="workflow-step-icon">3</span>
+            <h3>HOD Final Approval</h3>
+          </div>
+          <p>On approval, both students’ batches are swapped automatically.</p>
+          <div className="workflow-step-meta">{flow.completed} completed for you</div>
         </div>
       </div>
 

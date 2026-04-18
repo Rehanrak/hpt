@@ -35,6 +35,30 @@ export default function AdminDashboard({ setActive }) {
         <StatCard icon="✗" label="Declined Swaps" value={stats?.rejected} cls="danger" />
       </div>
 
+      <div className="workflow-grid" style={{ marginBottom: 24 }}>
+        <div className="workflow-step">
+          <div className="workflow-step-header">
+            <span className="workflow-step-icon">1</span>
+            <h3>Student Request</h3>
+          </div>
+          <p>Student submits swap request and partner either accepts or rejects it.</p>
+        </div>
+        <div className="workflow-step">
+          <div className="workflow-step-header">
+            <span className="workflow-step-icon">2</span>
+            <h3>Admin Verification</h3>
+          </div>
+          <p>Review students, their batches and CGPA, and add an optional HOD remark.</p>
+        </div>
+        <div className="workflow-step">
+          <div className="workflow-step-header">
+            <span className="workflow-step-icon">3</span>
+            <h3>Finalize Swap</h3>
+          </div>
+          <p>Approved requests complete the batch exchange for both students.</p>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h3>Recently Pending (Awaiting Approval)</h3>
         <button className="btn btn-ghost btn-sm" onClick={() => setActive('all-requests')}>View All Pending →</button>
