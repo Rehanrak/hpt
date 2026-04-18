@@ -1,7 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const db = require('../database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+
+const createSwapRequestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  message: { message: 'Too many request attempts. Please try again shortly.' }
+});
 
 // Helper to send notification
 function notify(userId, message) {
@@ -40,34 +50,58 @@ router.get('/eligible', authenticateToken, (req, res) => {
 });
 
 // POST /api/swaps/request - Send 2-way swap request
-router.post('/request', authenticateToken, (req, res) => {
+router.post('/request', createSwapRequestLimiter, authenticateToken, (req, res) => {
   const { partner_id, reason } = req.body;
   const initiator_id = req.user.id;
 
   if (!partner_id || !reason) {
     return res.status(400).json({ message: 'Partner and reason are required.' });
   }
+  if (Number(partner_id) === Number(initiator_id)) {
+    return res.status(400).json({ message: 'You cannot send a request to yourself.' });
+  }
 
-  // Check if they already have an active request
-  db.get(
-    `SELECT id FROM swap_requests 
-     WHERE (initiator_id = ? AND partner_id = ? AND status NOT IN ('rejected_partner', 'rejected_admin'))`,
-    [initiator_id, partner_id],
-    (err, existing) => {
-      if (existing) return res.status(400).json({ message: 'Active request already exists between you two.' });
+  db.get(`SELECT id, batch, cgpa, year FROM users WHERE id = ? AND role = 'student'`, [initiator_id], (err, initiator) => {
+    if (err) return res.status(500).json({ message: 'Server error.' });
+    if (!initiator) return res.status(400).json({ message: 'Invalid initiator.' });
 
-      db.run(
-        `INSERT INTO swap_requests (initiator_id, partner_id, status, reason) VALUES (?, ?, 'pending_partner', ?)`,
-        [initiator_id, partner_id, reason],
-        function (err) {
-          if (err) return res.status(500).json({ message: 'Failed to submit request.', error: err.message });
-          
-          notify(partner_id, `You have a new swap request from ${req.user.name}.`);
-          res.status(201).json({ message: 'Swap request sent to partner.', id: this.lastID });
+    db.get(`SELECT id, batch, cgpa, year FROM users WHERE id = ? AND role = 'student'`, [partner_id], (err, partner) => {
+      if (err) return res.status(500).json({ message: 'Server error.' });
+      if (!partner) return res.status(404).json({ message: 'Partner not found.' });
+
+      const eligibilityErrors = [];
+      if (initiator.year !== partner.year) eligibilityErrors.push('same year is required');
+      if (initiator.batch === partner.batch) eligibilityErrors.push('partner must be in a different batch');
+      if (Math.abs((initiator.cgpa || 0) - (partner.cgpa || 0)) > 1.0) eligibilityErrors.push('CGPA difference must be 1.0 or less');
+      const isEligible = eligibilityErrors.length === 0;
+      if (!isEligible) {
+        return res.status(400).json({ message: `Selected student is not eligible: ${eligibilityErrors.join(', ')}.` });
+      }
+
+      // Check if they already have an active request (in either direction)
+      db.get(
+        `SELECT id FROM swap_requests 
+         WHERE ((initiator_id = ? AND partner_id = ?) OR (initiator_id = ? AND partner_id = ?))
+         AND status NOT IN ('rejected_partner', 'rejected_admin')`,
+        [initiator_id, partner_id, partner_id, initiator_id],
+        (err, existing) => {
+          if (err) return res.status(500).json({ message: 'Server error.' });
+          if (existing) return res.status(400).json({ message: 'Active request already exists between you two.' });
+
+          db.run(
+            `INSERT INTO swap_requests (initiator_id, partner_id, status, reason) VALUES (?, ?, 'pending_partner', ?)`,
+            [initiator_id, partner_id, reason],
+            function (err) {
+              if (err) return res.status(500).json({ message: 'Failed to submit request.', error: err.message });
+              
+              notify(partner_id, `You have a new swap request from ${req.user.name}.`);
+              res.status(201).json({ message: 'Swap request sent to partner.', id: this.lastID });
+            }
+          );
         }
       );
-    }
-  );
+    });
+  });
 });
 
 // GET /api/swaps/me - Get sent and received requests
