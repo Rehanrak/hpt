@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../database');
 require('dotenv').config();
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret';
+const { JWT_SECRET } = require('../config/auth');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
