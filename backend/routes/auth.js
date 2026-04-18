@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../database');
 require('dotenv').config();
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret';
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -50,7 +51,7 @@ router.post('/login', (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, name: user.name, role: user.role },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
 
